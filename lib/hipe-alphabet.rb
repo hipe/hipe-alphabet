@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 
-require 'rubygems'
 require 'ruby-debug'
 require 'hipe-cli'
 require 'open3' 

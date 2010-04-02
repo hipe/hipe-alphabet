@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+
+require 'hipe-alphabet'
+puts Alphabet.new.cli.run(ARGV) if $PROGRAM_NAME == __FILE__
