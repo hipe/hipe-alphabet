@@ -8,7 +8,7 @@ begin
   Jeweler::Tasks.new do |gem|
     gem.name        = 'hipe-alphabet'
     gem.summary     = 'how i serialize the non-linear'
-    gem.description =  "this is so small it doesn\'t deserve it's own gem"
+    gem.description = "this is so small it doesn\'t deserve it's own gem"
     gem.email       = 'chip.malice@gmail.com'
     gem.homepage    = 'http://github.com/hipe/hipe-alphabet'
     gem.authors     = [ 'Chip Malice' ]

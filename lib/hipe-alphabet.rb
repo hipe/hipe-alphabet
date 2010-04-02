@@ -7,16 +7,6 @@ require 'open3'
 # This started off as a one-off to give an overview of all projects i'm working on,
 # in terms of whether or not they are versioned, whether they are versioned remotely,
 # and whether any modifications have been made to them since the last commit.
-#
-#
-# It assumes that projects folders have symlinks of lowercase single letters in the
-# user's home directory, (and for now an ~/alphabet.txt file giving the projects titles)
-#
-# ~ > cat alphabet.txt
-# a -> rbtree
-# b -> simplebtree
-# c -> hipe-cli
-# d -> webrat
 
 module Hipe
   class Alphabet
@@ -30,8 +20,12 @@ module Hipe
       puts line('LTR','NAME','REMOTE','AHEAD','CHANGE').gsub(' ','_')
       alphabet_data.each(&proc_where)
       puts line('','','','','').gsub(' ','_')
-      puts "                                 it's my code in a box"
+      puts "                            it's my code in a box"
       ''
+      if errors.any?
+        puts "\n\n"
+        puts errors.join("\n")
+      end
     end
 
     cli.does :list, "basic list of projects"
@@ -40,6 +34,10 @@ module Hipe
     end
 
   private
+
+    def errors
+      @errors ||= []
+    end
 
     def alphabet_filename
       %x{ls -d ~/alphabet.txt}.chomp
@@ -67,17 +65,22 @@ module Hipe
       unless md
         abort("failed to match line in alphabet.txt: #{line}")
       end
-      info = {:path=>md[2], :label=>[1]}
+      info = {:path=>md[2], :label=>md[1]}
       info
+    end
+
+    def open2_str cmd
+      stdin, stdout, stderr = Open3.popen3 cmd
+      out = stdout.read.chomp
+      err = stderr.read.chomp
+      [out, err]
     end
 
     def report_where_and_change(label, path)
       # return ['-','-'] if x[:tags].include?('theirs')
       # @fixme no shell escaping below
       path = hack_path(path)
-      stdin, stdout, stderr = Open3.popen3 %{cd #{path}; git remote -v}
-      out = stdout.read.chomp
-      err = stderr.read.chomp
+      out, err = open2_str %{cd #{path}; git remote -v}
       if (err.length>0)
         if err =~ /not a git repository/i
           where = '(no repo)'
@@ -114,12 +117,10 @@ module Hipe
     end
 
     def proc_where
-      @proc_where ||= begin
-        lambda do |x|
-          use_path = File.basename(x[:path])
-          where, change = report_where_and_change(x[:label], x[:path])
-          puts line( x[:label],use_path ,where,0, change)
-        end
+      @proc_where ||= lambda do |x|
+        use_path = File.basename(x[:path])
+        where, change = report_where_and_change(x[:label], x[:path])
+        puts line( x[:label],use_path ,where,0, change)
       end
     end
 
@@ -129,9 +130,20 @@ module Hipe
       sprintf(%{| %-22s  |%17s  | %5s | %20s |}, first_col.slice(0,22), where, ahead, change)
     end
 
+    def open2_warn cmd
+      out, err = open2_str(cmd)
+      if err.length > 0
+        longer = sprintf("when executing this command:\n%s\ngot this error:\n%s",
+          cmd, err
+        )
+        errors.push longer
+      end
+      out
+    end
+
     def change_summary(path)
-      list = %x{cd #{path}; git ls-files --others }
-      stat = %x{cd #{path}; git diff --numstat}
+      list = open2_warn %{cd #{path}; git ls-files --others}
+      stat = open2_warn %{cd #{path}; git diff --numstat}
       num_added = list.scan(/\n/).size
       num_changed = stat.scan(/\n/).size
       a = []
@@ -145,8 +157,7 @@ module Hipe
     end
 
     def describe_ln_target(letter)
-      stdin,stdout,stderr = Open3.popen3 %{ls -ld ~/#{letter}}
-      out = stdout.read.chomp
+      out, err = open2_str %{ls -ld ~/#{letter}}
       out = File.basename(out) if (out.length > 0)
       err = stderr.read.chomp
       err = '(bad link)' if err =~ /no such file or directory/i
