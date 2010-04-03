@@ -21,7 +21,7 @@ module Hipe
       alphabet_data.each(&proc_where)
       puts line('','','','','').gsub(' ','_')
       puts "                            it's my code in a box"
-      ''
+      puts
       if errors.any?
         puts "\n\n"
         puts errors.join("\n")
@@ -31,6 +31,16 @@ module Hipe
     cli.does :list, "basic list of projects"
     def list
       %x{cat ~/alphabet.txt}
+    end
+
+    cli.does :edit, "lauch your editor on the file"
+    def edit
+      path = ENV['HOME']+'/alphabet.txt'
+      editor = ENV['EDITOR'] || 'nano'
+      system("#{editor} #{path}")
+      puts "done editing #{path}:"
+      puts File.read(path)
+      nil
     end
 
   private
@@ -105,9 +115,9 @@ module Hipe
       if (names.size > 0)
         where = names.uniq.to_s
       else
-        where = "(no remote)"+describe_ln_target(label)
+        where = "(no remote)" # +describe_ln_target(label)
       end
-      change_summ = change_summary(path)
+      change_summ = determine_num_added_num_changed(path)
       change = (""==change_summ) ? %{ok} : change_summ
       return [where,change]
     end
@@ -120,14 +130,27 @@ module Hipe
       @proc_where ||= lambda do |x|
         use_path = File.basename(x[:path])
         where, change = report_where_and_change(x[:label], x[:path])
-        puts line( x[:label],use_path ,where,0, change)
+        ahead = determine_ahead x[:path]
+        puts line( x[:label], use_path, where, ahead, change)
+      end
+    end
+
+    Digit = /\A *(\d+) *\Z/
+    def determine_ahead path
+      cmd = "cd #{path}; git rev-list origin/master.. | wc -l"
+      resp = open2_warn cmd
+      if md = Digit.match(resp)
+        md[1]
+      else
+        errors.push("unparsable response \"#{resp}\" from command: #{cmd}")
+        'err'
       end
     end
 
     def line(label,path,where,ahead,change)
       # first_col = ((letter.length + title.length) > 0) ? %{#{letter} -> #{title}} : ''
       first_col = "#{label} -> #{path}"
-      sprintf(%{| %-22s  |%17s  | %5s | %20s |}, first_col.slice(0,22), where, ahead, change)
+      sprintf(%{| %-22s  |%20s  | %5s | %20s |}, first_col.slice(0,22), where, ahead, change)
     end
 
     def open2_warn cmd
@@ -141,8 +164,8 @@ module Hipe
       out
     end
 
-    def change_summary(path)
-      list = open2_warn %{cd #{path}; git ls-files --others}
+    def determine_num_added_num_changed(path)
+      list = open2_warn %{cd #{path}; git ls-files --others --exclude-standard}
       stat = open2_warn %{cd #{path}; git diff --numstat}
       num_added = list.scan(/\n/).size
       num_changed = stat.scan(/\n/).size
@@ -156,13 +179,14 @@ module Hipe
       a.join(", ")
     end
 
-    def describe_ln_target(letter)
-      out, err = open2_str %{ls -ld ~/#{letter}}
-      out = File.basename(out) if (out.length > 0)
-      err = stderr.read.chomp
-      err = '(bad link)' if err =~ /no such file or directory/i
-      out+(err.length>0?(err) : '')
-    end
+    # def describe_ln_target(letter)
+    #   'foo'
+    #   # out, err = open2_str %{ls -ld ~/#{letter}}
+    #   # out = File.basename(out) if (out.length > 0)
+    #   # err = stderr.read.chomp
+    #   # err = '(bad link)' if err =~ /no such file or directory/i
+    #   # out+(err.length>0?(err) : '')
+    # end
   end
 end
 
